@@ -113,3 +113,50 @@ class SplitDetectionPredictor(DetectionPredictor):
             pred[:, :4] = ops.scale_boxes(img_shape, pred[:, :4], orig_shape)
             results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred))
         return results
+    def postprocess_v2(self, preds, img=(640,640), orig_imgs=None):
+        """Post-processes predictions and returns a list of Results objects."""
+
+
+        preds = nms.non_max_suppression(preds,
+                                        self.args.conf,
+                                        self.args.iou,
+                                        agnostic=self.args.agnostic_nms,
+                                        max_det=self.args.max_det,
+                                        classes=self.args.classes)
+
+        if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
+            orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
+
+        results = []
+        for i, pred in enumerate(preds):
+            orig_img = orig_imgs[i]
+            img_path = ""
+            h, w , _ = orig_img.shape
+            square_size = max(h, w)
+            pred[:, :4] = ops.scale_boxes(img, pred[:, :4], (square_size,square_size))
+            if h > w:
+                pred[:, 0].clamp_(0, w)  # x1
+                pred[:, 2].clamp_(0, w)  # x2
+            else:
+                pred[:, 1].clamp_(0, h)  # y1
+                pred[:, 3].clamp_(0, h)  # y2
+            results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred))
+        return results
+    def get_file_preds(self,results,frame_idx, orig_img_shape):
+        OUTPUT_DIR = "dataset/predictions"
+        frame_id = frame_idx
+        h , w = orig_img_shape
+        output_file = os.path.join(OUTPUT_DIR, f"frame_{frame_id:06d}.txt")
+        with open(output_file, "a") as f:
+
+            for res in results:
+                for box in res.boxes.data.cpu().numpy():
+
+                    x1, y1, x2, y2, conf, classes = box
+
+                    cx = ((x1 + x2) / 2) / w
+                    cy = ((y1 + y2) / 2) / h
+                    bw = (x2 - x1) / w
+                    bh = (y2 - y1) / h
+                    f.write(f"{classes[frame_id]} {cx} {cy} {bw} {bh} {conf[frame_id]}\n")
+                    frame_id += 1

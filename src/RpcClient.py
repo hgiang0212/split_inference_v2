@@ -69,6 +69,7 @@ class RpcClient:
             data = self.response["data"]
             compress = self.response["compress"]
             cal_map = self.response["cal_map"]
+            visual_map = self.response["visual_map"]
 
             debug_mode = self.response["debug_mode"]
             cluster_id = self.response["cluster_id"]
@@ -119,7 +120,7 @@ class RpcClient:
             start = time.time()
             self.logger.log_info(f"Start Inference")
             if cal_map["enable"] is False:
-                self.inference_func(self.model, data, num_layers, save_layers, batch_frame, self.logger, compress , level = cluster_id )
+                self.inference_func(self.model, data, num_layers, save_layers, batch_frame, self.logger, compress, visual_map, level = cluster_id )
             else:
                 self.check_compress_func(self.model, data, num_layers, save_layers, batch_frame, self.logger, compress, cal_map , level = cluster_id )
             all_time = time.time() - start

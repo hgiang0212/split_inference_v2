@@ -5,6 +5,7 @@ import cv2
 from src.Model import SplitDetectionPredictor
 from src.Compress import Encoder, Decoder
 from src.Utils import load_ground_truth, compute_map, format_size
+from Map import DirectoryMAPCalculator
 import os
 import copy
 import time
@@ -29,6 +30,7 @@ class Scheduler:
         self.queue_name = None
         self.num_edges = None
         self.num_clouds = None
+        self.orig_imgs = []
 
         self.bbox_queue = "bbox_queue"
         self.ori_img_queue = "ori_img_queue"
@@ -234,6 +236,7 @@ class Scheduler:
 
             h, w, c = frame.shape
             orig_img_size = (h, w)
+            self.orig_imgs.append(frame)
             # make border
             # size = max(h, w)
             if h > w:
@@ -290,8 +293,9 @@ class Scheduler:
         pbar.close()
         logger.log_info(f"Finish Inference.")
 
-    def last_layer(self, model, batch_frame, logger, compress):
+    def last_layer(self, model, batch_frame, logger, compress, visual_map):
         start_time = time.time()
+        predictor = SplitDetectionPredictor(model, overrides={"imgsz": 640})
         num_last = 1
         count = 0
         frame_index = 1
@@ -328,6 +332,19 @@ class Scheduler:
                     # Tail predict
                     logger.log_info(f'Start inference {batch_frame} frames.')
                     predictions = model.forward_tail(y)
+
+
+                    if visual_map:
+                        gt_dir = "dataset/groundtruth"
+                        pred_dir = "dataset/predictions"
+                        calc = DirectoryMAPCalculator()
+                        results = predictor.postprocess_v2(predictions, self.orig_imgs)
+                        (h, w) = self.orig_imgs[0].shape[:2]
+                        predictor.get_file_preds(frame_index - 1, (h, w))
+                        calc.load_ground_truth_folder(gt_dir)
+                        calc.load_prediction_folder(pred_dir)
+
+
                     self.current_time = time.time()
                     if self.previous_time is not None:
                         delta = (self.current_time - self.previous_time) / batch_frame
@@ -352,6 +369,9 @@ class Scheduler:
                     print(f"[FPS with batch size {batch_frame} ] : {self.FPSs}")
                     total_time = time.time() - start_time
                     self.gpu_time_2 = self.gpu_time_2 / 1000.0
+                    if visual_map:
+                        map50 = calc.compute_map(0.5)
+                        print(f"MAP :  {map50}")
                     self.send_to_tracker(self.bbox_queue, 'STOP', frame_index, logger, 'STOP', total_time)
                     count += 1
                     if count == num_last:

@@ -23,9 +23,9 @@ rabbit:
    username: "dai"
    password: "dai"
 
-  virtual-host: /
-  queue_device_1: "device1"
-  queue_device_2: "device2"
+   virtual-host: /
+   queue_device_1: "device1"
+   queue_device_2: "device2"
 
 
 # ---- Input / Output ----
@@ -48,6 +48,12 @@ compress:
 cal_map:
   enable: False
   create_label: False     # Generate ground-truth labels
+
+
+# ---- Calculate MAP ----
+
+visual_map:
+  enable: True
 
 
 # ---- Tracker ----
