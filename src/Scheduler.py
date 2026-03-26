@@ -5,7 +5,7 @@ import cv2
 from src.Model import SplitDetectionPredictor
 from src.Compress import Encoder, Decoder
 from src.Utils import load_ground_truth, compute_map, format_size
-from Map import DirectoryMAPCalculator
+from src.Map import DirectoryMAPCalculator
 import os
 import copy
 import time
@@ -30,7 +30,7 @@ class Scheduler:
         self.queue_name = None
         self.num_edges = None
         self.num_clouds = None
-        self.orig_imgs = []
+        self.orig_img_shape = ()
 
         self.bbox_queue = "bbox_queue"
         self.ori_img_queue = "ori_img_queue"
@@ -70,7 +70,7 @@ class Scheduler:
                                              data["layers_output"]]
                 message = pickle.dumps({
                     "action": "OUTPUT",
-                    "data": data
+                    "data": data,
                 })
                 if self.mess_size.cl1_2_cl2 == - 1:
                     self.mess_size.cl1_2_cl2 = len(message)
@@ -236,7 +236,7 @@ class Scheduler:
 
             h, w, c = frame.shape
             orig_img_size = (h, w)
-            self.orig_imgs.append(frame)
+            self.orig_img_shape = orig_img_size
             # make border
             # size = max(h, w)
             if h > w:
@@ -267,7 +267,7 @@ class Scheduler:
                 preprocess_image = predictor.preprocess(input_image)
 
                 # Head predictf
-                y = model.forward_head(preprocess_image, save_layers)
+                y = model.forward_head(preprocess_image, save_layers, self.orig_img_shape)
 
                 logger.log_info(f'End inference {batch_frame} frames.')
 
@@ -338,11 +338,9 @@ class Scheduler:
                         gt_dir = "dataset/groundtruth"
                         pred_dir = "dataset/predictions"
                         calc = DirectoryMAPCalculator()
-                        results = predictor.postprocess_v2(predictions, self.orig_imgs)
-                        (h, w) = self.orig_imgs[0].shape[:2]
-                        predictor.get_file_preds(frame_index - 1, (h, w))
-                        calc.load_ground_truth_folder(gt_dir)
-                        calc.load_prediction_folder(pred_dir)
+                        predictor.postprocess_v2(predictions, (640,640),frame_index-1,y["orig_img_shape"])
+                        # calc.load_ground_truth_folder(gt_dir)
+                        # calc.load_prediction_folder(pred_dir)
 
 
                     self.current_time = time.time()
@@ -369,9 +367,9 @@ class Scheduler:
                     print(f"[FPS with batch size {batch_frame} ] : {self.FPSs}")
                     total_time = time.time() - start_time
                     self.gpu_time_2 = self.gpu_time_2 / 1000.0
-                    if visual_map:
-                        map50 = calc.compute_map(0.5)
-                        print(f"MAP :  {map50}")
+                    # if visual_map:
+                    #     map50 = calc.compute_map(0.5)
+                    #     print(f"MAP :  {map50}")
                     self.send_to_tracker(self.bbox_queue, 'STOP', frame_index, logger, 'STOP', total_time)
                     count += 1
                     if count == num_last:
@@ -385,7 +383,7 @@ class Scheduler:
     def middle_layer(self, model):
         pass
 
-    def inference_func(self, model, data, num_layers, save_layers, batch_frame, logger, compress, level = 1 ):
+    def inference_func(self, model, data, num_layers, save_layers, batch_frame, logger, compress, visual_map, level = 1 ):
         logger.log_debug(f"[DEBUG at inference_func] {level}")
         self.queue_name = f'intermediate_queue_{level}'
         self.cluster_id = level
@@ -393,7 +391,7 @@ class Scheduler:
         if self.layer_id == 1:
             self.first_layer(model, data, save_layers, batch_frame, logger, compress )
         elif self.layer_id == num_layers:
-            self.last_layer(model, batch_frame, logger, compress )
+            self.last_layer(model, batch_frame, logger, compress, visual_map)
         else:
             self.middle_layer(model)
 
