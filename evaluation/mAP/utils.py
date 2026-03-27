@@ -2,188 +2,202 @@ import os
 import numpy as np
 
 
+class DirectoryMAPCalculator:
+    """
+    input : path of ground truth and predictions\
+        GT:         class center_x center_y width height
+        Prediction: class center_x center_y width height conf
+        Coordinates are normalized (0–1)
+    output :
+        self.compute_map(threshold)
+        self.compute_map_coco : return threshold from 0.5 to 0.95
+    """
 
-def reset(self):
-    self.predictions = []
-    self.ground_truths = []
+    def __init__(self):
+        self.predictions = []
+        self.ground_truths = []
 
-@staticmethod
-def calculate_iou(box1, box2):
+    def reset(self):
+        self.predictions = []
+        self.ground_truths = []
 
-    xA = max(box1[0], box2[0])
-    yA = max(box1[1], box2[1])
-    xB = min(box1[2], box2[2])
-    yB = min(box1[3], box2[3])
+    @staticmethod
+    def calculate_iou(box1, box2):
 
-    inter = max(0, xB - xA) * max(0, yB - yA)
+        xA = max(box1[0], box2[0])
+        yA = max(box1[1], box2[1])
+        xB = min(box1[2], box2[2])
+        yB = min(box1[3], box2[3])
 
-    if inter <= 0:
-        return 0.0
+        inter = max(0, xB - xA) * max(0, yB - yA)
 
-    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+        if inter <= 0:
+            return 0.0
 
-    union = area1 + area2 - inter
+        area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+        area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
 
-    return inter / union if union > 0 else 0.0
+        union = area1 + area2 - inter
 
-@staticmethod
-def yolo_to_xyxy(cx, cy, w, h):
+        return inter / union if union > 0 else 0.0
 
-    x1 = cx - w / 2
-    y1 = cy - h / 2
-    x2 = cx + w / 2
-    y2 = cy + h / 2
+    @staticmethod
+    def yolo_to_xyxy(cx, cy, w, h):
 
-    return [x1, y1, x2, y2]
+        x1 = cx - w / 2
+        y1 = cy - h / 2
+        x2 = cx + w / 2
+        y2 = cy + h / 2
 
-def load_ground_truth_folder(folder):
+        return [x1, y1, x2, y2]
 
-    frame_id = 1
+    def load_ground_truth_folder(self, folder):
 
-    for file in sorted(os.listdir(folder)):
+        frame_id = 1
 
-        path = os.path.join(folder, file)
+        for file in sorted(os.listdir(folder)):
 
-        if not os.path.isfile(path):
-            continue
+            path = os.path.join(folder, file)
 
-        with open(path) as f:
-            for line in f:
+            if not os.path.isfile(path):
+                continue
 
-                parts = line.strip().split()
+            with open(path) as f:
+                for line in f:
 
-                if len(parts) < 5:
-                    continue
+                    parts = line.strip().split()
 
-                cls, cx, cy, w, h = map(float, parts)
+                    if len(parts) < 5:
+                        continue
 
-                box = yolo_to_xyxy(cx, cy, w, h)
+                    cls, cx, cy, w, h= map(float, parts)
 
-                ground_truths.append({
-                    "frame_id": frame_id,
-                    "class_id": int(cls),
-                    "box": box
-                })
+                    box = self.yolo_to_xyxy(cx, cy, w, h)
 
-        frame_id += 1
+                    self.ground_truths.append({
+                        "frame_id": frame_id,
+                        "class_id": int(cls),
+                        "box": box
+                    })
 
-def load_prediction_folder(self, folder):
+            frame_id += 1
 
-    frame_id = 1
+    def load_prediction_folder(self, folder):
 
-    for file in sorted(os.listdir(folder)):
+        frame_id = 1
 
-        path = os.path.join(folder, file)
+        for file in sorted(os.listdir(folder)):
 
-        if not os.path.isfile(path):
-            continue
+            path = os.path.join(folder, file)
 
-        with open(path) as f:
-            for line in f:
+            if not os.path.isfile(path):
+                continue
 
-                parts = line.strip().split()
+            with open(path) as f:
+                for line in f:
 
-                if len(parts) < 6:
-                    continue
+                    parts = line.strip().split()
 
-                cls, cx, cy, w, h, conf = map(float, parts)
+                    if len(parts) < 6:
+                        continue
 
-                box = self.yolo_to_xyxy(cx, cy, w, h)
+                    cls, cx, cy, w, h, conf = map(float, parts)
 
-                self.predictions.append({
-                    "frame_id": frame_id,
-                    "class_id": int(cls),
-                    "box": box,
-                    "conf": conf
-                })
+                    box = self.yolo_to_xyxy(cx, cy, w, h)
 
-        frame_id += 1
+                    self.predictions.append({
+                        "frame_id": frame_id,
+                        "class_id": int(cls),
+                        "box": box,
+                        "conf": conf
+                    })
 
-def _calculate_ap_per_class(self, class_id, iou_threshold):
+            frame_id += 1
 
-    preds = [p for p in self.predictions if p["class_id"] == class_id]
-    gts = [g for g in self.ground_truths if g["class_id"] == class_id]
+    def _calculate_ap_per_class(self, class_id, iou_threshold):
 
-    if len(gts) == 0:
-        return 0
+        preds = [p for p in self.predictions if p["class_id"] == class_id]
+        gts = [g for g in self.ground_truths if g["class_id"] == class_id]
 
-    preds = sorted(preds, key=lambda x: x["conf"], reverse=True)
+        if len(gts) == 0:
+            return 0
 
-    gt_pool = {}
+        preds = sorted(preds, key=lambda x: x["conf"], reverse=True)
 
-    for g in gts:
-        fid = g["frame_id"]
-        gt_pool.setdefault(fid, []).append({
-            "box": g["box"],
-            "matched": False
-        })
+        gt_pool = {}
 
-    TP = np.zeros(len(preds))
-    FP = np.zeros(len(preds))
+        for g in gts:
+            fid = g["frame_id"]
+            gt_pool.setdefault(fid, []).append({
+                "box": g["box"],
+                "matched": False
+            })
 
-    for i, pred in enumerate(preds):
+        TP = np.zeros(len(preds))
+        FP = np.zeros(len(preds))
 
-        fid = pred["frame_id"]
+        for i, pred in enumerate(preds):
 
-        best_iou = 0
-        best_idx = -1
+            fid = pred["frame_id"]
 
-        for j, gt in enumerate(gt_pool.get(fid, [])):
+            best_iou = 0
+            best_idx = -1
 
-            iou = self.calculate_iou(pred["box"], gt["box"])
+            for j, gt in enumerate(gt_pool.get(fid, [])):
 
-            if iou > best_iou:
-                best_iou = iou
-                best_idx = j
+                iou = self.calculate_iou(pred["box"], gt["box"])
 
-        if best_iou >= iou_threshold and best_idx >= 0:
+                if iou > best_iou:
+                    best_iou = iou
+                    best_idx = j
 
-            if not gt_pool[fid][best_idx]["matched"]:
-                TP[i] = 1
-                gt_pool[fid][best_idx]["matched"] = True
+            if best_iou >= iou_threshold and best_idx >= 0:
+
+                if not gt_pool[fid][best_idx]["matched"]:
+                    TP[i] = 1
+                    gt_pool[fid][best_idx]["matched"] = True
+                else:
+                    FP[i] = 1
             else:
                 FP[i] = 1
-        else:
-            FP[i] = 1
 
-    acc_TP = np.cumsum(TP)
-    acc_FP = np.cumsum(FP)
+        acc_TP = np.cumsum(TP)
+        acc_FP = np.cumsum(FP)
 
-    recalls = acc_TP / len(gts)
-    precisions = acc_TP / (acc_TP + acc_FP + 1e-9)
+        recalls = acc_TP / len(gts)
+        precisions = acc_TP / (acc_TP + acc_FP + 1e-9)
 
-    mrec = np.concatenate(([0], recalls, [1]))
-    mpre = np.concatenate(([1], precisions, [0]))
+        mrec = np.concatenate(([0], recalls, [1]))
+        mpre = np.concatenate(([1], precisions, [0]))
 
-    for i in range(len(mpre) - 1, 0, -1):
-        mpre[i - 1] = max(mpre[i - 1], mpre[i])
+        for i in range(len(mpre) - 1, 0, -1):
+            mpre[i - 1] = max(mpre[i - 1], mpre[i])
 
-    idx = np.where(mrec[1:] != mrec[:-1])[0]
+        idx = np.where(mrec[1:] != mrec[:-1])[0]
 
-    ap = np.sum((mrec[idx + 1] - mrec[idx]) * mpre[idx + 1])
+        ap = np.sum((mrec[idx + 1] - mrec[idx]) * mpre[idx + 1])
 
-    return ap
+        return ap
 
-def compute_map(self, iou_threshold=0.5):
+    def compute_map(self, iou_threshold=0.5):
 
-    classes = set([g["class_id"] for g in self.ground_truths] +
-                  [p["class_id"] for p in self.predictions])
+        classes = set([g["class_id"] for g in self.ground_truths] +
+                      [p["class_id"] for p in self.predictions])
 
-    aps = []
+        aps = []
 
-    for c in classes:
-        aps.append(self._calculate_ap_per_class(c, iou_threshold))
+        for c in classes:
+            aps.append(self._calculate_ap_per_class(c, iou_threshold))
 
-    return np.mean(aps) if aps else 0
+        return np.mean(aps) if aps else 0
 
-def compute_coco_map(self):
+    def compute_coco_map(self):
 
-    thresholds = np.arange(0.5, 1.0, 0.05)
+        thresholds = np.arange(0.5, 1.0, 0.05)
 
-    scores = [self.compute_map(t) for t in thresholds]
+        scores = [self.compute_map(t) for t in thresholds]
 
-    return np.mean(scores)
+        return np.mean(scores)
 
 
 # gt_dir = "dataset/groundtruth"

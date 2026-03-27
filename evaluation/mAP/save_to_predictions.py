@@ -1,14 +1,10 @@
-from ultralytics.utils import ops,nms
+from ultralytics.models.yolo.detect import DetectionPredictor
+from ultralytics.utils import ops, nms
 import os
 
 
-
-class Predictions:
-    def __init__(self,**kwargs):
-        super().__init__(**kwargs)
-
-    def postprocess_v2(self, preds, img=(640, 640), frame_idx=0, orig_img_shape=()):
-        OUTPUT_DIR = "dataset/predictions"
+class Predictions(DetectionPredictor):
+    def get_file_predictions(self, preds, img=(640, 640), frame_idx=0, orig_img_shape=(),OUTPUT_DIR="dataset/predictions" ):
         os.makedirs(OUTPUT_DIR, exist_ok=True)  # tự tạo thư mục nếu chưa có
 
         (h, w) = orig_img_shape
@@ -32,6 +28,7 @@ class Predictions:
             with open(output_file, "w") as f:
                 for box in pred:
                     x1, y1, x2, y2, conf, classes = box
+                    classes = int(classes)
                     cx = ((x1 + x2) / 2) / w
                     cy = ((y1 + y2) / 2) / h
                     bw = (x2 - x1) / w
