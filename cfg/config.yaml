@@ -14,6 +14,7 @@ rabbit:
   username: dai
   password: dai
 
+
   virtual-host: /
   queue_device_1: "device1"
   queue_device_2: "device2"

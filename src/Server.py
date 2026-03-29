@@ -54,7 +54,7 @@ class Server:
         self.cal_map = config["cal_map"]
         self.n_cluster = config["clustering"]["num_clusters"]
 
-        self.logger = src.Log.Logger(f"{config["log-path"]}/app.log" , debug_mode = self.debug_mode)
+        self.logger = src.Log.Logger(f"{config['log-path']}/app.log" , debug_mode = self.debug_mode)
         self.logger.log_info(f"Application start. Server is waiting for {self.total_clients} clients.")
 
         self.data_clients = {}  # storing all data of clients ( overview )
