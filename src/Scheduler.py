@@ -51,7 +51,7 @@ class Scheduler:
 
         self.cluster_id = 1
         self.orig_img_size = []
-        self.batch_size = 0
+        self.frame_index = 0
 
 
     def send_next_layer(self, intermediate_queue, data, logger, compress, signal='CONTINUE'):
@@ -71,7 +71,7 @@ class Scheduler:
                     "action": "OUTPUT",
                     "data": data,
                     "origin_image_size" : self.orig_img_size,
-                    "batch_size" : self.batch_size
+                    "frame_index" : self.frame_index
                 })
                 if self.mess_size.cl1_2_cl2 == - 1:
                     self.mess_size.cl1_2_cl2 = len(message)
@@ -189,7 +189,7 @@ class Scheduler:
         predictor = SplitDetectionPredictor(model, overrides={"imgsz": 640})
         process = psutil.Process(os.getpid())
 
-        frame_index = 1
+        self.frame_index = 1
 
         if self.enable_tracker:
             self.channel.queue_declare(queue=self.queue.ori_img, durable=False)
@@ -215,7 +215,7 @@ class Scheduler:
             # send origin frame
             if not ret or frame is None:
                 if len(lst_frame) > 0 :
-                    self.send_ori_img(self.queue.ori_img, lst_frame, frame_index, self.orig_img_size, logger,
+                    self.send_ori_img(self.queue.ori_img, lst_frame, self.frame_index, self.orig_img_size, logger,
                                       total_frames)
                     input_image = torch.stack(input_image)
                     logger.log_info(f'Start inference {len(lst_frame)} frames.')
@@ -238,14 +238,14 @@ class Scheduler:
                     self.send_next_layer(self.queue.intermadiate, y, logger, compress)
                     logger.log_info('Send a message.')
                     pbar.update(len(lst_frame))
-                    frame_index += len(lst_frame)
+                    self.frame_index += len(lst_frame)
 
 
                 y = 'STOP'
                 self.send_notify_server(y , self.cluster_id , 1)
                 total_time = time.time() - start_time
 
-                self.send_ori_img(self.queue.ori_img, y, frame_index, (0, 0), logger, signal='STOP',
+                self.send_ori_img(self.queue.ori_img, y, self.frame_index, (0, 0), logger, signal='STOP',
                                   total_time=total_time)
                 break
 
@@ -267,7 +267,7 @@ class Scheduler:
             input_image.append(tensor)
 
             if len(input_image) == batch_frame:
-                self.send_ori_img(self.queue.ori_img, lst_frame, frame_index, self.orig_img_size, logger, total_frames)
+                self.send_ori_img(self.queue.ori_img, lst_frame, self.frame_index, self.orig_img_size, logger, total_frames)
                 input_image = torch.stack(input_image)
                 self.batch_size = batch_frame
                 logger.log_info(f'Start inference {batch_frame} frames.')
@@ -280,7 +280,7 @@ class Scheduler:
                 # Preprocess
                 preprocess_image = predictor.preprocess(input_image)
 
-                # Head predictf
+                # Head predict
                 y = model.forward_head(preprocess_image, save_layers)
 
                 logger.log_info(f'End inference {batch_frame} frames.')
@@ -290,7 +290,7 @@ class Scheduler:
                 input_image = []
                 lst_frame = []
                 pbar.update(batch_frame)
-                frame_index += batch_frame
+                self.frame_index += batch_frame
             else:
                 continue
 
@@ -335,9 +335,10 @@ class Scheduler:
                     y["layers_output"] = [t.to(self.device) if t is not None else None for t in y["layers_output"]]
 
                     # Tail predict
-                    logger.log_info(f'Start inference {received_data["batch_size"]} frames.')
+                    logger.log_info(f'Start inference {batch_frame} frames.')
 
                     predictions = model.forward_tail(y)
+                    batch_size = len(predictions[0])
 
                     if self.enable_map :
                         processor = Predictions(save=True)
@@ -345,13 +346,13 @@ class Scheduler:
                         results = processor.postprocess_v2(
                             preds=predictions,
                             img=(640, 640),
-                            frame_idx=frame_index,
+                            frame_idx=received_data["frame_index"],
                             orig_img_shape=(h, w),
                         )
 
                     self.current_time = time.time()
                     if self.previous_time is not None:
-                        delta = (self.current_time - self.previous_time) / received_data['batch_size']
+                        delta = (self.current_time - self.previous_time) / batch_size
                         if delta != 0 :
                             fps = 1 / delta
                         else :
@@ -360,11 +361,11 @@ class Scheduler:
                     self.previous_time = self.current_time
 
                     self.send_to_tracker(self.queue.bbox, predictions, frame_index, logger)
-                    frame_index += received_data['batch_size']
+                    frame_index += batch_size
 
-                    logger.log_info(f'End inference {received_data["batch_size"]} frames.')
+                    logger.log_info(f'End inference {batch_size} frames.')
 
-                    pbar.update(received_data['batch_size'])
+                    pbar.update(batch_size)
                 else:
                     self.send_notify_server("STOPPED" , self.cluster_id , 2)
                     logger.log_debug(f"[Num edges ] {self.num_edges}")
