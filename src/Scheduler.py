@@ -220,7 +220,6 @@ class Scheduler:
                     input_image = torch.stack(input_image)
                     logger.log_info(f'Start inference {len(lst_frame)} frames.')
                     input_image = input_image.to(self.device)
-                    self.batch_size = len(lst_frame)
 
                     # Prepare data
                     predictor.setup_source(input_image)
