@@ -1,13 +1,14 @@
 import numpy as np
+from scipy.linalg import bandwidth
 from sklearn.cluster import AffinityPropagation
-from sklearn.preprocessing import StandardScaler
-
+import sys
 
 class APCluster:
-    def __init__(self, features, device_names):
+    def __init__(self, features, device_names,alpha = 1, nums_cloud = 1):
         self.features = features
         self.device_names = device_names
-
+        self.alpha = alpha
+        self.nums_cloud = nums_cloud
     def Affinity_Propagation(self):
         """
         features     : shape (N, F)
@@ -24,42 +25,72 @@ class APCluster:
         assert len(self.features) == len(self.device_names), "Mismatch input size"
 
         # Scale features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(self.features)
+        min_values = self.features.min(axis=0)
+        max_values = self.features.max(axis=0)
+        eps = 1e-8
+        features_scaled = (self.features - min_values) / (max_values - min_values + eps)
 
         # Affinity Propagation clustering
-        AP = AffinityPropagation(
-            random_state=42
-        )
-        labels = AP.fit_predict(X_scaled)
+        AP = AffinityPropagation(preference=None, random_state=42)
+        labels = AP.fit_predict(features_scaled)
+        nums_cluster = len(AP.cluster_centers_indices_)
+        if(self.nums_cloud < nums_cluster):
+            print("Warning! The number of cloud < the number of cluster")
+            sys.exit()
 
 
-        # Power score
-        power_score = [gflops for gflops,_ in X_scaled]
-
-        # Group devices by cluster-
+        # Group devices by cluster
         cluster_map = {}
-        for name, label, score in zip(self.device_names, labels, power_score):
-            cluster_map.setdefault(label, []).append((name, score))
+        for name, label, score in zip(self.device_names, labels, features_scaled):
+            group = cluster_map.setdefault(label, {"name_devices": [], "score_devices": []})
+            group["devices"].append(name)
+            group["score_devices"].append(score)
 
-        # 5. Sort clusters by sum gflops
-        cluster_order = sorted(
-            cluster_map.keys(),
-            key=lambda c: np.sum([s for _, s in cluster_map[c]])
-        )
+        #Calculating strength of cluster
+        strength_cl = {}
+        mean_gflops_cl = {}
+        mean_bandwidth_cl = {}
+        cloud_2_cl = {}
+        for label , data in cluster_map.items():
+            scores = data["score_devices"]
+            sum_gflops_cl , sum_bw_cl = np.sum(scores,axis=0)
+            strength_cl[label] = self.alpha * sum_gflops_cl + (1 - self.alpha) * sum_bw_cl
+            mean_gflops_cl[label] , mean_bandwidth_cl[label] = np.mean(scores,axis=0)
+            cloud_2_cl[label] = 1
 
-        # Build result dict
+        # Match cloud to cluster
+        r = self.nums_cloud - nums_cluster
+        while r>0 :
+            p = 0
+            i = 0
+            for label , strength in strength_cl.items() :
+                pressure = strength / cloud_2_cl[label]
+                if  pressure > p :
+                    p = pressure
+                    i = int(label)
+            cloud_2_cl[i] += 1
+            r -= 1
+
+            # Build result dict
         result = {}
-        for i, c in enumerate(cluster_order, start=1):
-            # sort devices inside cluster
-            devices_sorted = sorted(
-                cluster_map[c],
-                key=lambda x: x[1]
-            )
-            result[f"level {i}"] = [d[0] for d in devices_sorted]
-
+        for label , data in cluster_map.items() :
+            result[label] = {}
+            result[label] = {
+                "name_devices": data["name_devices"],
+                "strength_of_cl": strength_cl[label],
+                "nums_cloud": cloud_2_cl[label],
+                "mean_score": (mean_gflops_cl[label], mean_bandwidth_cl[label])
+            }
         return result
 
+
+        #   { 1 : {  "name_devices" : [device A , device B , ...],
+        #               "strength_of_cl" : 0.9,
+        #               "nums_cloud" : 2,
+        #               "mean_score" : (0.5,0.3) }
+        #     2 : ...}
+
+    
     def run(self):
         return self.Affinity_Propagation()
 
@@ -96,22 +127,16 @@ class Clustering:
                 if client_id != 0  :
                     id_names.append(client_id)
                     features.append(self.extract_device_info(self.data_clients[client_id]['device']))
-
+            nums_cloud = len(self.lst_devices[2])
 
             cluster = APCluster(
                 features=features,
                 device_names=id_names,
+                nums_cloud= nums_cloud,
             )
 
             res = cluster.run()
-            # RES OF CLUSTERING
-            # {'level 1': ['6944d2d1-f8c2-43a6-a023-d5fd3e5727c0'], 'level 2': ['1b084d14-c818-49cf-90a9-3157803fd32d']}
 
-        #     for level in res.keys():
-        #         for client_id in res[level]:
-        #             self.dict_res[client_id] = int(level[-1])
-        #
-        # return self.dict_res
 
 
 
