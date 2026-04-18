@@ -95,9 +95,9 @@ class Clustering:
 
     # data_clients
     # {'c74b1a5f-5bc6-4946-992b-8f97f5826469': {
-    #     'device': {'Total Ram': 16, 'Total Storage': 840, 'Internet': 4000, 'Core': 64}, 'stage': 1},
+    #     'device': {"GFLOPs": 1.5 ,"Internet": 100}, 'stage': 1},
     #  'f3b612ea-5a9d-485f-be90-b199e0e1d0bd': {
-    #      'device': {'Total Ram': 48, 'Total Storage': 420, 'Internet': 2000, 'Core': 32}, 'stage': 2}}
+    #      'device': {"GFLOPs": 6 ,"Internet": 300}, 'stage': 2}}
 
     # return
     # dict with key : uuid and value : cluster_id
