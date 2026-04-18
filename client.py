@@ -49,7 +49,7 @@ if __name__ == "__main__":
         # print(f"[TYPE device] {type(device)}")  # dict
         print("Random values for local test !")
         for key , _ in device.items():
-            device[key] = device[key] * random.randint(1, 4) if isinstance(device[key], int) else device[key]
+            device[key] = device[key] * random.randint(1, 5)
 
     data = {"action": "REGISTER", "client_id": client_id, "layer_id": args.layer_id,
             "message": "Hello from Client!" , "device" : device}
