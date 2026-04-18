@@ -14,14 +14,14 @@ server:
 # ---- RabbitMQ Configuration ----
 
 rabbit:
-  address: 127.0.0.1
-  username: guest
-  password: guest
+#  address: 127.0.0.1
+#  username: guest
+#  password: guest
 
   # Remote setup (example)
-#   address: "192.168.101.91"
-#   username: "dai"
-#   password: "dai"
+   address: "192.168.101.91"
+   username: "dai"
+   password: "dai"
 
   virtual-host: /
   queue_device_1: "device1"
@@ -48,12 +48,6 @@ compress:
 cal_map:
   enable: False
   create_label: False     # Generate ground-truth labels
-
-
-# ---- Calculate MAP ----
-
-visual_map:
-  enable: True
 
 
 # ---- Tracker ----

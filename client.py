@@ -49,7 +49,7 @@ if __name__ == "__main__":
         # print(f"[TYPE device] {type(device)}")  # dict
         print("Random values for local test !")
         for key , _ in device.items():
-            device[key] = device[key] * random.randint(1, 4) if isinstance(device[key], int) else device[key]
+            device[key] = device[key] * random.randint(1, 5)
 
     data = {"action": "REGISTER", "client_id": client_id, "layer_id": args.layer_id,
             "message": "Hello from Client!" , "device" : device}
@@ -72,7 +72,8 @@ if __name__ == "__main__":
 
     logger.log_debug(f"\n [ Layer id ] : {args.layer_id} \n [ UUID client id ] : {client_id} " )
 
-    scheduler = Scheduler(client_id, args.layer_id , channel, device , config["tracker"]["enable"] ) #, num_client=config['server']['clients'])
+    scheduler = Scheduler(client_id, args.layer_id , channel, device ,
+                          config["tracker"]["enable"] , config["cal_map"]["predictions"]) #, num_client=config['server']['clients'])
     logger.log_debug(" Tracker status : ", config["tracker"]["enable"])
     client = RpcClient(client_id, args.layer_id, address, username, password, virtual_host, scheduler.inference_func,
                        scheduler.check_compress_func, device , remeasure_mode , config)

@@ -63,7 +63,6 @@ class Server:
         self.debug_mode = config["debug-mode"]
         self.compress = config["compress"]
         self.cal_map = config["cal_map"]
-        self.visual_map = config["visual_map"]
 
         log_path = config["log-path"]
         self.logger = src.Log.Logger(f"{log_path}/app.log" , debug_mode = self.debug_mode)
@@ -286,7 +285,6 @@ class Server:
                     "debug_mode": self.debug_mode,
                     "compress": self.compress,
                     "cal_map": self.cal_map,
-                    "visual_map": self.visual_map,
                     "cluster_id": 0 ,    # setup below
                     # "num_cluster" : self.n_cluster
                     }

@@ -1,76 +1,91 @@
 import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import AffinityPropagation
+import sys
 
 
-class ClKmeans:
-    def __init__(self, features, device_names, n_clusters=3):
+class APCluster:
+    def __init__(self, features, device_names, alpha=1, nums_cloud=1):
         self.features = features
         self.device_names = device_names
-        self.n_clusters = n_clusters
+        self.alpha = alpha
+        self.nums_cloud = nums_cloud
 
-    def k_means(self):
+    def Affinity_Propagation(self):
         """
         features     : shape (N, F)
         device_names : list of length N
-        n_clusters   : number of power levels
 
         return:
         {
-            "level 1": [device weakest → strongest],
-            "level 2": [...],
-            ...
+            res = { 0 : {  "name_devices" : [device A , device B , ...],
+                           "nums_cloud" : 2,
+                           "mean_score" : (0.5,0.3) }
+                    1 : ...}
         }
         """
 
         assert len(self.features) == len(self.device_names), "Mismatch input size"
 
         # Scale features
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(self.features)
+        min_values = self.features.min(axis=0)
+        max_values = self.features.max(axis=0)
+        eps = 1e-8
+        features_scaled = (self.features - min_values) / (max_values - min_values + eps)
 
-        # KMeans clustering
-        kmeans = KMeans(
-            n_clusters=self.n_clusters,
-            n_init=10,
-            random_state=42
-        )
-        labels = kmeans.fit_predict(X_scaled)
+        # Affinity Propagation clustering
+        AP = AffinityPropagation(preference=None, random_state=42)
+        labels = AP.fit_predict(features_scaled)
+        labels = labels.astype(int).tolist()
+        nums_cluster = len(AP.cluster_centers_indices_)
+        if (self.nums_cloud < nums_cluster):
+            print("Warning! The number of cloud < the number of cluster")
+            sys.exit()
 
-        # Compute power score
-        power_score = X_scaled.sum(axis=1)
-
-        # Group devices by cluster-
+        # Group devices by cluster
         cluster_map = {}
-        for name, label, score in zip(self.device_names, labels, power_score):
-            cluster_map.setdefault(label, []).append((name, score))
+        for name, label, score in zip(self.device_names, labels, features_scaled):
+            group = cluster_map.setdefault(label, {"name_devices": [], "score_devices": []})
+            group["name_devices"].append(name)
+            group["score_devices"].append(score)
 
-        # 5. Sort clusters by average power
-        cluster_order = sorted(
-            cluster_map.keys(),
-            key=lambda c: np.mean([s for _, s in cluster_map[c]])
-        )
+        # Calculating strength of cluster
+        strength_cl = {}
+        mean_gflops_cl = {}
+        mean_bandwidth_cl = {}
+        cloud_2_cl = {}
+        for label, data in cluster_map.items():
+            scores = data["score_devices"]
+            sum_gflops_cl, sum_bw_cl = np.sum(scores, axis=0)
+            strength_cl[label] = self.alpha * sum_gflops_cl + (1 - self.alpha) * sum_bw_cl
+            mean_gflops_cl[label], mean_bandwidth_cl[label] = np.mean(scores, axis=0)
+            cloud_2_cl[label] = 1
 
-        # Build result dict
+        # Match cloud to cluster
+        r = self.nums_cloud - nums_cluster
+        while r > 0:
+            p = 0
+            i = 0
+            for label, strength in strength_cl.items():
+                pressure = strength / cloud_2_cl[label]
+                if pressure > p:
+                    p = pressure
+                    i = label
+            cloud_2_cl[i] += 1
+            r -= 1
+
+            # Build result dict
         result = {}
-        for i, c in enumerate(cluster_order, start=1):
-            # sort devices inside cluster
-            devices_sorted = sorted(
-                cluster_map[c],
-                key=lambda x: x[1]
-            )
-            result[f"level {i}"] = [d[0] for d in devices_sorted]
-
+        for label, data in cluster_map.items():
+            result[label] = {}
+            result[label] = {
+                "name_devices": data["name_devices"],
+                "nums_cloud": cloud_2_cl[label],
+                "mean_score": (mean_gflops_cl[label], mean_bandwidth_cl[label])
+            }
         return result
 
     def run(self):
-        if self.n_clusters == 1:
-            return self.k_means()
-            # print("The number of cluster is 1")
-        elif self.n_clusters > len(self.features):
-            print("[Ops the number of cluster > length of features ")
-        else:
-            return self.k_means()
+        return self.Affinity_Propagation()
 
 
 class Clustering:
@@ -86,61 +101,53 @@ class Clustering:
 
     # return
     # dict with key : uuid and value : cluster_id
-    def __init__(self , lst_devices , data_clients , n_cluster ):
+    def __init__(self, lst_devices, data_clients):
         self.lst_devices = lst_devices
         self.data_clients = data_clients
-        self.n_cluster = n_cluster
-        self.dict_res = {}   # dict store each str uuid correspond to cluster
+        self.dict_res = {}  # dict store each str uuid correspond to cluster
 
-    def extract_device_info(self , dict_devices ) :    # return list info
+    def extract_device_info(self, dict_devices):  # return list info
         lst_data = []
-        for values in dict_devices.values() :
+        for values in dict_devices.values():
             lst_data.append(values)
-        return  lst_data
+        return lst_data
 
     def run(self):
 
-        for stage in range(1 , len(self.lst_devices) ):
-            id_names = []
-            features = []
-            for client_id in self.lst_devices[stage]:
-                if client_id != 0  :
-                    id_names.append(client_id)
-                    print(f'check client id {client_id}')
-                    features.append(self.extract_device_info(self.data_clients[client_id]['device']))
+        id_names = []
+        features = []
+        for client_id in self.lst_devices[1]:
+            if client_id != 0:
+                id_names.append(client_id)
+                features.append(self.extract_device_info(self.data_clients[client_id]['device']))
+        nums_cloud = len(self.lst_devices[2]) - 1
+        features = np.array(features)
+        cluster = APCluster(
+            features=features,
+            device_names=id_names,
+            nums_cloud=nums_cloud,
+        )
 
-            print(f'stage {stage}')
-            print(f'id names {id_names}')
-            print(f'features {features}')
+        res = cluster.run()
 
-            cluster = ClKmeans(
-                features=features,
-                device_names=id_names,
-                n_clusters=self.n_cluster
-            )
-
-            res = cluster.run()
-            # RES OF CLUSTERING
-            # {'level 1': ['6944d2d1-f8c2-43a6-a023-d5fd3e5727c0'], 'level 2': ['1b084d14-c818-49cf-90a9-3157803fd32d']}
-
-            for level in res.keys():
-                for client_id in res[level]:
-                    if stage == 1 :
-                        self.dict_res[client_id] = int(level[-1])
-                    else :
-                        self.dict_res[client_id] = self.n_cluster -int(level[-1]) + 1
-
+        cloud_idx = 1
+        for cluster in res.keys():
+            for edge_device in res[cluster]["name_devices"]:
+                self.dict_res[edge_device] = cluster
+            for j in range(res[cluster]["nums_cloud"]):
+                self.dict_res[self.lst_devices[2][cloud_idx]] = cluster
+            cloud_idx += 1
+        print(self.dict_res)
         return self.dict_res
 
-
-
 #  Example feature matrix (N=5 devices, F=3 features)
-# features = np.array([
-#     [200, 150, 100],   # Device A (weak)
-#     [250, 180, 120],   # Device B
-#     [800, 700, 650],   # Device C (strong)
-#     [850, 720, 680],   # Device D (strongest)
-#     [400, 300, 250],   # Device E (medium)
+# [ GFLOPs, Bandwidth ]
+# features_edge = np.array([
+#     [1.5 , 100],
+#     [3 , 200],
+#     [5 , 300],
+#     [7 , 400],
+#     [9 , 600],
 # ])
 #
 # # Device names (must match number of rows)
