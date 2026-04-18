@@ -350,7 +350,6 @@ class Server:
             cluster = Clustering(
                 lst_devices=self.lst_devices,
                 data_clients=self.data_clients,
-                n_cluster=self.n_cluster
             )
             res = cluster.run()
             self.logger.log_debug(f'RES {res}')
