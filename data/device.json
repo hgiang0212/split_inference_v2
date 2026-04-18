@@ -1,7 +1,5 @@
 {
-  "Total Ram": 16 ,
-  "Total Storage": 210 ,
-  "Internet": 1000 ,
-  "Core": 16
-
+  "GFLOPs": 1.5 ,
+  "Internet": 100
 }
+
