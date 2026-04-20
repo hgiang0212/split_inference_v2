@@ -137,24 +137,30 @@ class Clustering:
             for j in range(res[cluster]["nums_cloud"]):
                 self.dict_res[self.lst_devices[2][cloud_idx]] = cluster
             cloud_idx += 1
-        print(self.dict_res)
+
         return self.dict_res
 
-#  Example feature matrix (N=5 devices, F=3 features)
-# [ GFLOPs, Bandwidth ]
-# features_edge = np.array([
-#     [1.5 , 100],
-#     [3 , 200],
-#     [5 , 300],
-#     [7 , 400],
-#     [9 , 600],
-# ])
-#
-# # Device names (must match number of rows)
-# device_names = [
-#     "Device_A",
-#     "Device_B",
-#     "Device_C",
-#     "Device_D",
-#     "Device_E"
-# ]
+#  Example
+
+# lst_devices = [0, [0, 'Device_A','Device_B','Device_C','Device_D','Device_E'], [0, 'Device_a','Device_b','Device_c','Device_d']]
+# data_clients = {'Device_A': {
+#     'device': {"GFLOPs" : 1.5 , "Internet": 100}, 'stage': 1},
+#  'Device_B': {
+#      'device': {"GFLOPs" : 3 , "Internet": 200}, 'stage': 1},
+#  'Device_C': {
+#      'device': {"GFLOPs" : 10 , "Internet": 300}, 'stage': 1},
+#  'Device_D': {
+#      'device': {"GFLOPs" : 11 , "Internet": 350}, 'stage': 1},
+#  'Device_E': {
+#      'device': {"GFLOPs" : 19 , "Internet": 600}, 'stage': 1},
+#  'Device_a': {
+#      'device': {"GFLOPs" : 24 , "Internet": 900}, 'stage': 2},
+#  'Device_b': {
+#      'device': {"GFLOPs" : 24.5 , "Internet": 900}, 'stage': 2},
+#  'Device_c': {
+#      'device': {"GFLOPs" : 25 , "Internet": 950}, 'stage': 2},
+#  'Device_d': {
+#      'device': {"GFLOPs" : 25.5 , "Internet": 1000}, 'stage': 2}
+# }
+# dict_res = Clustering(lst_devices,data_clients).run()
+# print(dict_res)
